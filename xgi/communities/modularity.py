@@ -5,9 +5,7 @@ import numpy as np
 import xgi
 from ..exception import XGIError
 
-__all__ = [
-    "compute_modularity",
-]
+__all__ = ["compute_modularity", "vol"]
 
 
 def compute_modularity(H, A, mtype="strict"):
@@ -39,7 +37,8 @@ def compute_modularity(H, A, mtype="strict"):
     if mtype != "strict":
         raise NotImplementedError("Only 'strict' modularity is supported right now.")
 
-    pass
+    if mtype == "strict":
+        return _strict_modularity(H, A)
 
 
 def _strict_modularity(H, A):
@@ -73,21 +72,24 @@ def _strict_modularity(H, A):
 
     """
 
-    internal_contributions = 0
+    # Compute edge contributions, e.g., edges within community
+    edge_contributions = 0
     for partition in A:
-        internal_contributions += xgi.subhypergraph(H, nodes=partition).num_edges
+        edge_contributions += xgi.subhypergraph(H, nodes=partition).num_edges
 
-    null_expectations = 0
+    # Compute degree tax, e.g., expectation in a Chung-Lu model
+    degree_tax = 0
     for edge_size in range(2, max(H.edges.size.aslist()) + 1):
         H_order = xgi.subhypergraph(H, edges=H.edges.filterby("order", edge_size - 1))
 
-        tmp = 0
+        total_volume = 0
         for partition in A:
-            tmp += np.power(vol(H, partition) / vol(H, H.nodes), edge_size)
-        null_expectations += H_order.num_edges * tmp
+            total_volume += np.power(vol(H, partition) / vol(H, H.nodes), edge_size)
+        degree_tax += H_order.num_edges * total_volume
 
-    return (1 / H.num_edges) * (internal_contributions - null_expectations)
+    return (1 / H.num_edges) * (edge_contributions - degree_tax)
 
 
 def vol(H, V):
+    """Volume"""
     return sum(map(lambda node: H.nodes.degree[node], V))

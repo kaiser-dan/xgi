@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 
+import random
+import networkx as nx
+
 import xgi
 from xgi.exception import XGIError
 
@@ -63,22 +66,82 @@ class TestStrictModularity:
     def test_one_group(self):
         A = [tuple(self.H.nodes)]
 
-        q = xgi.communities.modularity._strict_modularity(self.H, A)
         expected = 0.0
+        actual = xgi.communities.modularity._strict_modularity(self.H, A)
 
-        assert np.isclose(q, expected)
+        assert np.isclose(actual, expected)
 
     def test_max_groups(self):
+        # TODO: Compute modularity of discrete partition directly
         A = [[node] for node in self.H.nodes]
 
-        q = xgi.communities.modularity._strict_modularity(self.H, A)
-        expected = 0.0
+        actual = xgi.communities.modularity._strict_modularity(self.H, A)
 
-        assert q < 0
+        assert actual < 0
 
-        # TODO: Compute modularity of discrete partition directly
-        # assert np.isclose(q, expected)
+    @pytest.mark.parametrize("num_groups", range(2, 11))
+    def test_random_partition_dyadic(self, num_groups):
+        _nodes = list(self.G.nodes)
+        random.shuffle(_nodes)
 
-    @pytest.mark.skip
+        A = [[] for _ in range(num_groups)]
+        for node in _nodes:
+            A[node % num_groups].append(node)
+
+        G_dyadic = xgi.to_graph(self.G)
+        expected = nx.community.modularity(G_dyadic, A)
+
+        actual = xgi.communities.modularity._strict_modularity(self.G, A)
+
+        assert np.isclose(actual, expected)
+
+    def test_fix_descriptive(self):
+        H = xgi.Hypergraph(
+            [
+                (0, 1),
+                (0, 2),
+                (0, 3),
+                (1, 2),
+                (1, 3),
+                (2, 3),
+                (4, 5),
+                (4, 6),
+                (4, 7),
+                (5, 6),
+                (5, 7),
+                (6, 7),
+            ]
+        )
+
+        A = [(0, 1), (2, 3), (4, 5), (6, 7)]
+
+        G = xgi.to_graph(H)
+        expected = nx.community.modularity(G, A)
+        actual = xgi.communities.modularity._strict_modularity(H, A)
+
+        assert np.isclose(actual, expected)
+
     def test_component_partition(self):
-        pass
+        H = xgi.Hypergraph(
+            [
+                (0, 1),
+                (0, 2),
+                (0, 3),
+                (1, 2),
+                (1, 3),
+                (2, 3),
+                (4, 5),
+                (4, 6),
+                (4, 7),
+                (5, 6),
+                (5, 7),
+                (6, 7),
+            ]
+        )
+
+        A = [(0, 1, 2, 3), (4, 5, 6, 7)]
+
+        expected = 1 / 2
+        actual = xgi.communities.modularity._strict_modularity(H, A)
+
+        assert np.isclose(actual, expected)
